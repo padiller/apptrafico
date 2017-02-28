@@ -1,56 +1,105 @@
+
+
+
+
+
+
+
+
 /*eslint-env node*/
-
-//------------------------------------------------------------------------------
-// node.js starter application for Bluemix
-//------------------------------------------------------------------------------
-
-// This application uses express as its web server
-// for more info, see: http://expressjs.com
-var express = require('express');
-
-// cfenv provides access to your Cloud Foundry environment
-// for more info, see: https://www.npmjs.com/package/cfenv
-var cfenv = require('cfenv');
-
-// create a new express server
-var app = express();
-
-// serve the files out of ./public as our main files
-app.use(express.static(__dirname + '/public'));
-
-// get the app environment from Cloud Foundry
-var appEnv = cfenv.getAppEnv();
-
-// start server on the specified port and binding host
-app.listen(appEnv.port, '0.0.0.0', function() {
-  // print a message when the server starts listening
-  console.log("server starting on " + appEnv.url);
-});
-
-
-
-
-
-
-'use strict';
-
-const VisualRecognitionV3 = require('watson-developer-cloud/visual-recognition/v3');
-const fs = require('fs');
-
-const visual_recognition = new VisualRecognitionV3({
-  api_key: '3735956cf7c2cb2d6dad568e98a3388c845a3adf',
-  version_date: '2016-05-19'
-});
-
-const params = {
-  // must be a .zip file containing images
-  images_file: fs.createReadStream('./resources/car.png')
-};
-
-visual_recognition.classify(params, function(err, res) {
-  if (err) {
-    console.log(err);
-  } else {
-    console.log(JSON.stringify(res, null, 2));
-  }
-});
+ 
+ var express = require('express');
+ var app = express();
+ 
+ 
+ var cfenv = require('cfenv');
+ 
+ 
+ var bodyParser  =   require("body-parser");
+ var multer = require('multer');
+ var path = require('path');
+ 
+ app.use(bodyParser.json());
+ app.use(bodyParser.urlencoded({"extended" : false}));
+ 
+ 
+ // serve the files out of ./public as our main files
+ app.use(express.static(__dirname + '/public'));
+   
+ var upload = multer({ dest: './public/images/'});
+ 
+ app.upload = upload;
+ 
+ // get the app environment from Cloud Foundry
+ var appEnv = cfenv.getAppEnv();
+ 
+ var fs = require("fs");
+ 
+ 
+ /**********************  Watson Visual Recognition  *********************************/
+ var watson = require('watson-developer-cloud');
+ 
+ var visual_recognition = watson.visual_recognition({
+   username: '****************',
+   password: '***************',
+   version: 'v2-beta',
+   version_date: '2015-12-02'
+ });
+ 
+ //Show all watson Classifiers
+ 
+ app.get('/listClassifiers', function (req, res) {
+ 
+     visual_recognition.listClassifiers({},
+         function(err, response) {
+          if (err)
+             console.log(err);
+          else
+             res.end(JSON.stringify(response, null, 2));
+         }
+     );
+ });
+ 
+ 
+ //Classiefies a picture
+app.post('/test', function(req, res) {
+       var file = null;
+     
+     upload(req, res, function(err) {
+       if(err) {
+         console.log('Error Occured = '+ JSON.stringify(err));
+         res.status(400).end("{\"results\":\"failure\"}");  
+         return;
+       }
+       console.log("here0 ="+req.file);
+       file = fs.createReadStream(req.file.path);
+       console.log("file ready = "+ JSON.stringify(file) + " or "+ file);
+       
+       var params = {
+         images_file: file
+       };
+       
+       visual_recognition.classify(params, function(err, results) {
+         // delete the recognized file
+         if (req.file)
+           fs.unlink(file.path);
+ 
+         if (err){
+           console.log("here 3 ="+ JSON.stringify(err) +" results= "+results);
+           res.status(400).end("{\"bla\":\"failure 2\"}");
+       }
+         else{
+             res.end(JSON.stringify(results));    
+         }
+       });
+     });
+ });
+ 
+ 
+ 
+ // start server on the specified port and binding host
+ app.listen(appEnv.port, '0.0.0.0', function() {
+ 
+     // print a message when the server starts listening
+   console.log("server starting on " + appEnv.url);
+ });
